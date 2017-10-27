@@ -15,7 +15,6 @@ from trellobot.trello import TrelloManager
 import humanize
 from datetime import datetime
 from datetime import timezone
-from dateutil.parser import parse as parse_date
 
 from collections import Counter
 
@@ -78,7 +77,7 @@ class TrelloBot:
         delay = (card.due - aware_now()).total_seconds()
         # If due date is past, we might handle it anyway
         if delay < 0:
-            # Notify: you had a non-completed card in the last 24 hours! Did you know?
+            # Notify: you had a non-completed card in the last 24 hours!
             if delay > -3600*24 and not card.dueComplete:
                 logging.debug(f'Non-sched card with recently past due {card}')
                 ctx.send(f'Card was due in the last 24 hours! {card}')
@@ -313,6 +312,7 @@ class TrelloBot:
                         em.append(f'\n - {c}')
 
     def demo(self, bot, update):
+        """Demo buttons and callbacks."""
         # If security check passes
         for ctx in security_check(bot, update):
             ctx.send(f'A *markdown* message :)', keyboard=[
@@ -366,7 +366,8 @@ class TrelloBot:
         """Handle buttons callbacks."""
         query = update.callback_query
         # Answer with a notification, without touching messages
-        bot.answerCallbackQuery(query.id,
+        bot.answerCallbackQuery(
+            query.id,
             text='Baccalà baccaqua',  # A message to be sent to client
             show_alert=True,  # If True, user gets a modal message
         )
@@ -390,7 +391,7 @@ class TrelloBot:
         #     chat_id=query.message.chat_id,
         #     message_id=query.message.message_id,
         #
-        #)
+        # )
 
     def run_bot(self, bot_key):
         """Start the bot, register handlers, etc."""
@@ -413,9 +414,9 @@ class TrelloBot:
         disp.add_handler(CommandHandler('blo', self.bl_org))
         disp.add_handler(CommandHandler('wlb', self.wl_board))
         disp.add_handler(CommandHandler('blb', self.bl_board))
-        #disp.add_handler(CommandHandler(['upcoming', 'upc', 'up', 'u'],
+        # disp.add_handler(CommandHandler(['upcoming', 'upc', 'up', 'u'],
         #                                self.upcoming_due))
-        #disp.add_handler(CommandHandler(['today', 'tod', 't'],
+        # disp.add_handler(CommandHandler(['today', 'tod', 't'],
         #                                self.today_due))
 
         updater.start_polling()

@@ -56,7 +56,7 @@ def test_fetch_all_boards():
         ]
         tc.fetch_json.return_value = boards
         # Orgs are currently not involved in board blacklisting
-        # tm._wl_org = [1, 3]  
+        # tm._wl_org = [1, 3]
         tm._wl_brd = [1, 3]
         # Prepare some fake orgs
         for bo, bf in zip(boards, tm.fetch_boards(None)):

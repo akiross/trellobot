@@ -49,7 +49,7 @@ class Messenger:
             for row in keyboard:
                 keys = []
                 for btn in row:
-                    #b = InlineKeyboardButton(btn[0], callback_data=btn[1])
+                    # b = InlineKeyboardButton(btn[0], callback_data=btn[1])
                     keys.append(InlineKeyboardButton(**btn))
                 rows.append(keys)
             keyboard = InlineKeyboardMarkup(rows)

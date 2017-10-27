@@ -59,7 +59,7 @@ class TrelloManager:
 
                 # If board has an organization, it is blacklisted iff
                 # both board or organization are not in whitelist
-                #if b['idOrganization'] is not None:
+                # if b['idOrganization'] is not None:
                 #    bbl = bbl or b['idOrganization'] not in self._wl_org
 
                 yield Board(b['id'], b['name'], bbl, b['url'])
