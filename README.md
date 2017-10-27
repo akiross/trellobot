@@ -94,12 +94,13 @@ releases deemed "ok for usage". Do not expect code in devel to work.
 
 Here's a list of things to do, possibly sorted by priority.
 
+ - [ ] Daily reminder of due cards (e.g. every morning at 8:00).
  - [ ] Have decent testing of the bot, mocking/faking trello and telegram.
  - [ ] Quick-add of cards with a default list if none is specified.
  - [ ] Instead of just blacklisting boards and organizations, the bot should
-      respect user subscriptions to list, cards and boards (get due
-	  notifications for every subscribed board/list/card and every card in
-	  subscribed list/board unless unsubscribed). Eventually, WL and BL shall
-	  be removed.
+       respect user subscriptions to list, cards and boards (get due
+	   notifications for every subscribed board/list/card and every card in
+	   subscribed list/board unless unsubscribed). Eventually, WL and BL shall
+	   be removed.
  - [ ] Allow multiple users at once (keys asked on start).
  - [ ] Support custom fields to make bot location-aware and other nice things.
