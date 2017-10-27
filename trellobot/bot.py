@@ -32,7 +32,7 @@ def tznaive(d):
 class TrelloBot:
     """Bot to make Trello perfect."""
 
-    check_int = 0.3  # Check interval in minutes
+    check_int = 10  # Check interval in minutes
 
     def __init__(self, trello_key, trello_secret, trello_token):
         """Initialize a TrelloBot, reading key files."""
