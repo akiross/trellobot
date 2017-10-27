@@ -42,6 +42,8 @@ class TrelloBot:
         self._dues = {}
         # Notification jobs
         self._jobs = {}
+        # Try to be as quiet as possible (remember: user can mute it)
+        self._quiet = True
 
         self._trello = TrelloManager(
             api_key=trello_key,
@@ -193,14 +195,20 @@ class TrelloBot:
 
     def rescan_updates(self, bot, update, job_queue):
         """Rescan cards tracking due dates."""
-        with Messenger(bot, update, 'Scanning for updates...') as msg:
-            # Get data, caching them
-            count = self._check_due(bot, msg, job_queue)
-            # n = len(list(self._trello.fetch_data()))
-            msg.override(f'Done. ' + self._report(count))
+        for ctx in security_check(bot, update):
+            if self._quiet:
+                self._check_due(bot, msg, job_queue)
+            else:
+                with Messenger(bot, update, 'Scanning for updates...') as msg:
+                    # Get data, caching them
+                    count = self._check_due(bot, msg, job_queue)
+                    # n = len(list(self._trello.fetch_data()))
+                    msg.override(f'Done. ' + self._report(count))
 
     def daily_report(self, bot, job):
         """Send a daily report about tasks."""
+        for ctx in security_check(bot, update):
+            pass
         # TODO list cards due next 24 hours
         # TODO list cards completed in the last 24 hours
 
@@ -238,6 +246,32 @@ class TrelloBot:
                         msg.append('\n'.join(later))
             else:
                 ctx.send('Sorry, I cannot list anything else right now.')
+
+    def preferences(self, bot, update):
+        """Process user preferences."""
+        for ctx in security_check(bot, update):
+            tokens = update.message.text.split()
+            try:
+                if tokens[1] == 'interval':
+                    t = int(tokens[2])  # Index and value can fail
+                    # Bound the maximum check interval in [30 seconds, 1 day]
+                    TrelloBot.check_int = min(max(t, 0.3), 60 * 24)
+                    ctx.send(f'Timeout set to {TrelloBot.check_int} minutes')
+                    # Accept changes
+                elif tokens[1] == 'quiet':
+                    self._quiet = True
+                    ctx.send('I will be quieter now')
+                elif tokens[1] == 'verbose':
+                    self._quiet = False
+                    ctx.send('I will talk a bit more now')
+            except Exception:
+                # Whatever goes wrong
+                ctx.send(
+                    f'*Settings help*\n'
+                    f'/set interval [n]  _update interval [0.3:{60*24}]_\n'
+                    f'/set quiet _make bot quieter_\n'
+                    f'/set verbose _make bot verbose_\n'
+                )
 
     def wl_org(self, bot, update):
         """Whitelist organizations."""
@@ -414,6 +448,7 @@ class TrelloBot:
         disp.add_handler(CommandHandler('blo', self.bl_org))
         disp.add_handler(CommandHandler('wlb', self.wl_board))
         disp.add_handler(CommandHandler('blb', self.bl_board))
+        disp.add_handler(CommandHandler('set', self.preferences))
         # disp.add_handler(CommandHandler(['upcoming', 'upc', 'up', 'u'],
         #                                self.upcoming_due))
         # disp.add_handler(CommandHandler(['today', 'tod', 't'],
