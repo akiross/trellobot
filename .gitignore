@@ -1,3 +1,10 @@
+# Access keys
+bot.txt
+key.txt
+secret.txt
+token.txt
+allowed.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
