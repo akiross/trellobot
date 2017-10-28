@@ -261,7 +261,7 @@ class TrelloBot:
             tokens = update.message.text.split()
             try:
                 if tokens[1] == 'interval':
-                    t = int(tokens[2])  # Index and value can fail
+                    t = float(tokens[2])  # Index and value can fail
                     # Bound the maximum check interval in [30 seconds, 1 day]
                     TrelloBot.check_int = min(max(t, 0.3), 60 * 24)
                     ctx.send(f'Interval set to {TrelloBot.check_int} minutes')
