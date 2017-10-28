@@ -380,7 +380,6 @@ class TrelloBot:
     def _list_boards(self, ctx):
         """Send two messages and fill them with wl/bl boards."""
         # List boards, blacklisted and not
-        count = Counter()
         abm = '*Allowed boards*'
         bbm = '*Not allowed boards*'
         stm = '*Status*: fetching data'
