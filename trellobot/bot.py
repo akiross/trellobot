@@ -184,11 +184,24 @@ class TrelloBot:
         # Return counter
         return count
 
+    def _update(self, bot, update, job_queue, quiet):
+        """Rescan cards tracking due dates."""
+        for ctx in security_check(bot, update):
+            if quiet:
+                self._check_due(bot, ctx, job_queue)
+            else:
+                stm = '*Status*: Scanning for updates...'
+                with ctx.spawn(stm) as msg:
+                    # Get data, caching them
+                    count = self._check_due(bot, msg, job_queue)
+                    # n = len(list(self._trello.fetch_data()))
+                    msg.override(f'*Status*: Done. ' + self._report(count))
+
     def check_updates(self, bot, job):
         """Check if new threads are present since last check."""
         logging.info('JOB: checking updates')
         update, job_queue = job.context
-        self.rescan_updates(bot, update, job_queue)
+        self._update(bot, update, job_queue, self._quiet)
 
     def _report(self, count):
         """Produce a report regarding count."""
@@ -196,15 +209,8 @@ class TrelloBot:
 
     def rescan_updates(self, bot, update, job_queue):
         """Rescan cards tracking due dates."""
-        for ctx in security_check(bot, update):
-            if self._quiet:
-                self._check_due(bot, ctx, job_queue)
-            else:
-                with ctx.spawn('Scanning for updates...') as msg:
-                    # Get data, caching them
-                    count = self._check_due(bot, msg, job_queue)
-                    # n = len(list(self._trello.fetch_data()))
-                    msg.override(f'Done. ' + self._report(count))
+        # User requested an explicit update, so disable quiet mode
+        self._update(bot, update, job_queue, False)
 
     def daily_report(self, bot, job):
         """Send a daily report about tasks."""
@@ -301,8 +307,13 @@ class TrelloBot:
         logging.info('Requested /wlb')
         for ctx in security_check(bot, update):
             bids = update.message.text.strip().split()
-            for bid in bids:
-                self._trello.whitelist_brd(bid)
+            if len(bids) > 1:
+                for bid in bids[1:]:
+                    self._trello.whitelist_brd(bid)
+                ctx.send('Boards whitelisted successfully.')
+            else:
+                self._list_boards(ctx)
+
         # TODO  update data and jobs
 
     def bl_board(self, bot, update):
@@ -310,8 +321,12 @@ class TrelloBot:
         logging.info('Requested /blb')
         for ctx in security_check(bot, update):
             bids = update.message.text.strip().split()
-            for bid in bids:
-                self._trello.blacklist_brd(bid)
+            if len(bids) > 1:
+                for bid in bids:
+                    self._trello.blacklist_brd(bid)
+                ctx.send('Boards blacklisted successfully.')
+            else:
+                self._list_boards(ctx)
         # TODO  update data and jobs
 
     def upcoming_due(self, bot, update):
@@ -362,6 +377,26 @@ class TrelloBot:
                 ]
             )
 
+    def _list_boards(self, ctx):
+        """Send two messages and fill them with wl/bl boards."""
+        # List boards, blacklisted and not
+        count = Counter()
+        abm = '*Allowed boards*'
+        bbm = '*Not allowed boards*'
+        stm = '*Status*: fetching data'
+        with ExitStack() as es:
+            # Setup context managers
+            aem = es.enter_context(ctx.spawn(abm, quiet=self._quiet))
+            bem = es.enter_context(ctx.spawn(bbm, quiet=self._quiet))
+            stm = es.enter_context(ctx.spawn(stm, quiet=self._quiet))
+            # Fetch boards and update messages
+            for b in self._trello.fetch_boards():
+                if b.blacklisted:
+                    bem.append(f'\n - {b} {b.id}')
+                else:
+                    aem.append(f'\n - {b} {b.id}')
+            stm.override(f'*Status*: Done.')
+
     def start(self, bot, update, job_queue):
         """Start the bot, schedule tasks and printing welcome message."""
         logging.info(f'Requested /start from user {update.message.chat_id}')
@@ -376,25 +411,9 @@ class TrelloBot:
                 quiet=self._quiet,
             )
 
-            # List boards, blacklisted and not
-            count = Counter()
-            abm = '*Allowed boards*'
-            bbm = '*Not allowed boards*'
-            stm = '*Status*: fetching data'
-            with ExitStack() as es:
-                # Setup context managers
-                aem = es.enter_context(ctx.spawn(abm, quiet=self._quiet))
-                bem = es.enter_context(ctx.spawn(bbm, quiet=self._quiet))
-                stm = es.enter_context(ctx.spawn(stm, quiet=self._quiet))
-                # Fetch boards and update messages
-                for b in self._trello.fetch_boards():
-                    if b.blacklisted:
-                        bem.append(f'\n - {b} {b.id}')
-                    else:
-                        c, _ = self._update_due(b.id, ctx, job_queue)
-                        count += c  # Keep stats
-                        aem.append(f'\n - {b} {b.id}')
-                stm.override(f'*Status*: Done. ' + self._report(count))
+            # List boards and their blacklistedness
+            self._list_boards(ctx)
+            self._update(bot, update, job_queue, False)
 
             ctx.send(f'Refreshing every {TrelloBot.check_int} mins',
                      quiet=self._quiet)
