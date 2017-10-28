@@ -11,24 +11,26 @@ class Messenger:
     parse_modes = {'md': ParseMode.MARKDOWN, 'html': ParseMode.HTML}
 
     @staticmethod
-    def from_message(bot, update, msg_handler, parse_mode='md', bufsize=0):
+    def from_message(bot, update, msg_handler, parse_mode='md', bufsize=8):
         """Build a new Messenger referring to a pre-existing message."""
         m = Messenger(bot, update, parse_mode=parse_mode, bufsize=bufsize)
         m._msg = msg_handler
         return m
 
     @staticmethod
-    def from_query(bot, query, parse_mode='md', bufsize=0):
+    def from_query(bot, query, parse_mode='md', bufsize=8):
         """Build a new Messenger tied to a query response."""
         return Messenger.from_message(bot, query, query.message,
                                       parse_mode, bufsize)
 
-    def __init__(self, bot, update, message=None, parse_mode='md', bufsize=8):
+    def __init__(self, bot, update, message=None,
+                 parse_mode='md', bufsize=8, quiet=False):
         """Create a new context for messaging."""
         logging.debug('Creating a Messenger')
         self.bot = bot
         self.update = update
         self._mode = parse_mode
+        self._quiet = quiet
         self._bufcap = bufsize  # How many edits to store before sending
         self._bufcount = 0  # How many edits are waiting to be sent
         # If present, send a message immediately, and save a handler
@@ -36,11 +38,12 @@ class Messenger:
         self._keyboard = []
         if message is not None:
             self._text = message
-            self._msg = self.send(message)
+            self._msg = self.send(message, quiet=quiet)
 
-    def spawn(self, message=None, bufsize=8):
+    def spawn(self, message=None, bufsize=8, quiet=False):
         """Spawn a new messenger with same bot, update and parse mode."""
-        return Messenger(self.bot, self.update, message, self._mode)
+        return Messenger(self.bot, self.update, message,
+                         self._mode, bufsize, self._quiet)
 
     def _make_keyboard(self, keyboard):
         """Build a keyboard markup."""
@@ -66,7 +69,7 @@ class Messenger:
             reply_markup=keyboard,
         )
 
-    def send(self, msg, keyboard=None):
+    def send(self, msg, keyboard=None, quiet=False):
         """Send a text message immediately, with optional keyboard."""
         logging.info(f'Sending message {msg} with mode {self._mode}')
         keyboard = self._make_keyboard(keyboard)
@@ -76,6 +79,7 @@ class Messenger:
             text=msg,
             parse_mode=Messenger.parse_modes.get(self._mode),
             reply_markup=keyboard,
+            disable_notification=quiet,
         )
 
     def flush(self):

@@ -17,6 +17,7 @@ from datetime import datetime
 from datetime import timezone
 
 from collections import Counter
+from contextlib import ExitStack
 
 
 def aware_now():
@@ -197,9 +198,9 @@ class TrelloBot:
         """Rescan cards tracking due dates."""
         for ctx in security_check(bot, update):
             if self._quiet:
-                self._check_due(bot, msg, job_queue)
+                self._check_due(bot, ctx, job_queue)
             else:
-                with Messenger(bot, update, 'Scanning for updates...') as msg:
+                with ctx.spawn('Scanning for updates...') as msg:
                     # Get data, caching them
                     count = self._check_due(bot, msg, job_queue)
                     # n = len(list(self._trello.fetch_data()))
@@ -207,8 +208,9 @@ class TrelloBot:
 
     def daily_report(self, bot, job):
         """Send a daily report about tasks."""
-        for ctx in security_check(bot, update):
-            pass
+        # TODO use security_check
+        # for ctx in security_check(bot, update):
+        pass
         # TODO list cards due next 24 hours
         # TODO list cards completed in the last 24 hours
 
@@ -370,23 +372,31 @@ class TrelloBot:
             ctx.send(
                 f'*Welcome!*\n'
                 f'TrelloBot will now make your life better. ',
+                quiet=self._quiet,
             )
 
             # List boards, blacklisted and not
             count = Counter()
-            abm, bbm = '*Allowed boards*', '*Not allowed boards*'
-            with ctx.spawn(abm) as aem, ctx.spawn(bbm) as bem:
-                with ctx.spawn('*Status*: fetching data') as stm:
-                    for b in self._trello.fetch_boards():
-                        if b.blacklisted:
-                            bem.append(f'\n - {b} {b.id}')
-                        else:
-                            c, _ = self._update_due(b.id, ctx, job_queue)
-                            count += c  # Keep stats
-                            aem.append(f'\n - {b} {b.id}')
-                    stm.override(f'*Status*: Done. ' + self._report(count))
+            abm = '*Allowed boards*'
+            bbm = '*Not allowed boards*'
+            stm = '*Status*: fetching data'
+            with ExitStack() as es:
+                # Setup context managers
+                aem = es.enter_context(ctx.spawn(abm, quiet=self._quiet))
+                bem = es.enter_context(ctx.spawn(bbm, quiet=self._quiet))
+                stm = es.enter_context(ctx.spawn(stm, quiet=self._quiet))
+                # Fetch boards and update messages
+                for b in self._trello.fetch_boards():
+                    if b.blacklisted:
+                        bem.append(f'\n - {b} {b.id}')
+                    else:
+                        c, _ = self._update_due(b.id, ctx, job_queue)
+                        count += c  # Keep stats
+                        aem.append(f'\n - {b} {b.id}')
+                stm.override(f'*Status*: Done. ' + self._report(count))
 
-            ctx.send(f'Refreshing every {TrelloBot.check_int} mins')
+            ctx.send(f'Refreshing every {TrelloBot.check_int} mins',
+                     quiet=self._quiet)
 
             # Start repeated job
             job_queue.run_repeating(
