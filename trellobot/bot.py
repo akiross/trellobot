@@ -43,6 +43,8 @@ class TrelloBot:
         self._dues = {}
         # Notification jobs
         self._jobs = {}
+        # Job for repeating updates
+        self._job_check = None
         # Try to be as quiet as possible (remember: user can mute it)
         self._quiet = True
 
@@ -255,7 +257,7 @@ class TrelloBot:
             else:
                 ctx.send('Sorry, I cannot list anything else right now.')
 
-    def preferences(self, bot, update):
+    def preferences(self, bot, update, job_queue):
         """Process user preferences."""
         for ctx in security_check(bot, update):
             tokens = update.message.text.split()
@@ -265,6 +267,7 @@ class TrelloBot:
                     # Bound the maximum check interval in [30 seconds, 1 day]
                     TrelloBot.check_int = min(max(t, 0.3), 60 * 24)
                     ctx.send(f'Interval set to {TrelloBot.check_int} minutes')
+                    self._schedule_repeating_updates(update, job_queue)
                     # Accept changes
                 elif tokens[1] == 'quiet':
                     self._quiet = True
@@ -396,6 +399,18 @@ class TrelloBot:
                     aem.append(f'\n - {b} {b.id}')
             stm.override(f'*Status*: Done.')
 
+    def _schedule_repeating_updates(self, update, job_queue):
+        """(Re)schedule check_updates to be repeated."""
+        if self._job_check is not None:
+            # Stop previous check
+            self._job_check.schedule_removal()
+
+        self._job_check = job_queue.run_repeating(
+            self.check_updates,
+            TrelloBot.check_int * 60.0,
+            context=(update, job_queue),
+        )
+
     def start(self, bot, update, job_queue):
         """Start the bot, schedule tasks and printing welcome message."""
         logging.info(f'Requested /start from user {update.message.chat_id}')
@@ -418,11 +433,7 @@ class TrelloBot:
                      quiet=self._quiet)
 
             # Start repeated job
-            job_queue.run_repeating(
-                self.check_updates,
-                TrelloBot.check_int * 60.0,
-                context=(update, job_queue),
-            )
+            self._schedule_repeating_updates(update, job_queue)
             self.started = True
 
     def buttons(self, bot, update):
@@ -477,7 +488,9 @@ class TrelloBot:
         disp.add_handler(CommandHandler('blo', self.bl_org))
         disp.add_handler(CommandHandler('wlb', self.wl_board))
         disp.add_handler(CommandHandler('blb', self.bl_board))
-        disp.add_handler(CommandHandler('set', self.preferences))
+        disp.add_handler(CommandHandler('set',
+                                        self.preferences,
+                                        pass_job_queue=True))
         # disp.add_handler(CommandHandler(['upcoming', 'upc', 'up', 'u'],
         #                                self.upcoming_due))
         # disp.add_handler(CommandHandler(['today', 'tod', 't'],
