@@ -258,7 +258,7 @@ class TrelloBot:
                     t = int(tokens[2])  # Index and value can fail
                     # Bound the maximum check interval in [30 seconds, 1 day]
                     TrelloBot.check_int = min(max(t, 0.3), 60 * 24)
-                    ctx.send(f'Timeout set to {TrelloBot.check_int} minutes')
+                    ctx.send(f'Interval set to {TrelloBot.check_int} minutes')
                     # Accept changes
                 elif tokens[1] == 'quiet':
                     self._quiet = True
@@ -268,9 +268,10 @@ class TrelloBot:
                     ctx.send('I will talk a bit more now')
             except Exception:
                 # Whatever goes wrong
+                # TODO display current values as well
                 ctx.send(
                     f'*Settings help*\n'
-                    f'/set interval [n]  _update interval [0.3:{60*24}]_\n'
+                    f'/set interval [0.3:{60*24}] _update interval_\n'
                     f'/set quiet _make bot quieter_\n'
                     f'/set verbose _make bot verbose_\n'
                 )
