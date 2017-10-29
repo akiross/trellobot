@@ -227,7 +227,7 @@ class TrelloBot:
         logging.info('Requested /ls')
         for ctx in security_check(bot, update):
             ctx.send(f'ECHO: {update.message}')
-            target = update.message.text.strip().split()
+            target = self._get_args(update)
             # List organizations if nothing was specified
             if len(target) == 1:
                 with ctx.spawn('Listing Organizations:\n') as msg:
@@ -260,7 +260,7 @@ class TrelloBot:
     def preferences(self, bot, update, job_queue):
         """Process user preferences."""
         for ctx in security_check(bot, update):
-            tokens = update.message.text.split()
+            tokens = self._get_args()
             try:
                 if tokens[1] == 'interval':
                     t = float(tokens[2])  # Index and value can fail
@@ -290,7 +290,7 @@ class TrelloBot:
         logging.info('Requested /wlo')
         for ctx in security_check(bot, update):
             # Get org IDS to whitelist
-            oids = update.message.text.strip().split()
+            oids = self._get_args(update)
             for oid in oids:
                 self._trello.whitelist_org(oid)
         # TODO update data and jobs
@@ -300,7 +300,7 @@ class TrelloBot:
         logging.info('Requested /blo')
         for ctx in security_check(bot, update):
             # Get org IDs to whitelist
-            oids = update.message.text.strip().split()
+            oids = self._get_args(update)
             for oid in oids:
                 self._trello.blacklist_org(oid)
         # TODO  update data and jobs
@@ -309,7 +309,7 @@ class TrelloBot:
         """Whitelist boards."""
         logging.info('Requested /wlb')
         for ctx in security_check(bot, update):
-            bids = update.message.text.strip().split()
+            bids = self._get_args(update)
             if len(bids) > 1:
                 for bid in bids[1:]:
                     self._trello.whitelist_brd(bid)
@@ -323,7 +323,7 @@ class TrelloBot:
         """Blacklist boards."""
         logging.info('Requested /blb')
         for ctx in security_check(bot, update):
-            bids = update.message.text.strip().split()
+            bids = self._get_args(update)
             if len(bids) > 1:
                 for bid in bids:
                     self._trello.blacklist_brd(bid)
@@ -411,13 +411,16 @@ class TrelloBot:
             context=(update, job_queue),
         )
 
+    def _get_args(self, update):
+        """Return a list of arguments from update message text."""
+        return update.message.text.strip().split()
+
     def start(self, bot, update, job_queue):
         """Start the bot, schedule tasks and printing welcome message."""
         logging.info(f'Requested /start from user {update.message.chat_id}')
 
         # If security check passes
         for ctx in security_check(bot, update):
-            # self.last_check = aware_now()
             # Welcome message
             ctx.send(
                 f'*Welcome!*\n'
@@ -433,7 +436,7 @@ class TrelloBot:
                      quiet=self._quiet)
 
             # Start repeated job
-            self._schedule_repeating_updates(update, job_queue)
+            self._schedule_repeating_updates(ctx.update, job_queue)
             self.started = True
 
     def buttons(self, bot, update):
@@ -467,6 +470,9 @@ class TrelloBot:
         #
         # )
 
+    def errors(self, bot, update, error):
+        logging.error(f'Got an error {error}')
+
     def run_bot(self, bot_key):
         """Start the bot, register handlers, etc."""
         # Setup bot
@@ -491,9 +497,26 @@ class TrelloBot:
         disp.add_handler(CommandHandler('set',
                                         self.preferences,
                                         pass_job_queue=True))
+
+        disp.add_error_handler(self.errors)
         # disp.add_handler(CommandHandler(['upcoming', 'upc', 'up', 'u'],
         #                                self.upcoming_due))
         # disp.add_handler(CommandHandler(['today', 'tod', 't'],
         #                                self.today_due))
 
-        updater.start_polling()
+        if False:
+        # Use webhooks instead of polling
+        # This creates updater.httpd as server, which **maybe** can be used
+        # to answer custom requests
+        # be sure to send messages with "disable_page_preview=True" to ensure
+        # client is not opening the links without consent
+        #
+            updater.start_webhook(
+                listen='0.0.0.0',
+                port=1234,
+                url_path='TOKEN',
+                key='private.key',
+                cert='cert.pem',
+                webhook_url='https://ring.ale.re:8443/TOKEN')
+        else:
+            updater.start_polling()

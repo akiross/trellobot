@@ -94,7 +94,9 @@ releases deemed "ok for usage". Do not expect code in devel to work.
 
 Here's a list of things to do, possibly sorted by priority.
 
- - [ ] Daily reminder of due cards (e.g. every morning at 8:00).
+ - [ ] Do not spam past dues.
+ - [ ] One or two daily reminders of due cards and recently past dues.
+ - [ ] Customizable 
  - [ ] Have decent testing of the bot, mocking/faking trello and telegram.
  - [ ] Quick-add of cards with a default list if none is specified.
  - [ ] Instead of just blacklisting boards and organizations, the bot should
