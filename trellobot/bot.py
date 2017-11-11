@@ -104,7 +104,7 @@ class TrelloBot:
         loop = asyncio.get_event_loop()
         loop.create_task(_notify(aware_now() - card.due))
 
-    def _schedule_due(self, card, ctx, job_queue):
+    async def _schedule_due(self, card, ctx, job_queue):
         """Schedule a job for due card, return True if actually enqueued."""
         # We are using time-aware dates, telegram API isn't:
         # convert to delay instead of using directly a datetime
@@ -114,7 +114,7 @@ class TrelloBot:
             # Notify: you had a non-completed card in the last 24 hours!
             if delay > -3600*24 and not card.dueComplete:
                 logging.debug(f'Non-sched card with recently past due {card}')
-                ctx.send(f'Card was due in the last 24 hours! {card}')
+                await ctx.send(f'Card was due in the last 24 hours! {card}')
             else:
                 logging.debug(f'Non-sched card with far past due {card}')
             return False
@@ -125,7 +125,7 @@ class TrelloBot:
             # If there is no time, notify immediately!
             if delay < 0:
                 logging.debug(f'Non-scheduling card due soon {card}')
-                ctx.send(f'Card is due in less than 1 hour! {card}')
+                await ctx.send(f'Card is due in less than 1 hour! {card}')
                 return False
             else:
                 logging.debug(f'Scheduling card due in future {card}')
@@ -138,10 +138,10 @@ class TrelloBot:
         self._dues[card.id] = card.due  # Save original due date
         return True
 
-    def _reschedule_due(self, card, ctx, job_queue):
+    async def _reschedule_due(self, card, ctx, job_queue):
         """Reschedule a job for due card."""
         self._unschedule_due(card.id, ctx, job_queue)
-        self._schedule_due(card, ctx, job_queue)
+        await self._schedule_due(card, ctx, job_queue)
 
     def _unschedule_due(self, cid, ctx, job_queue):
         """Unschedule a job previously set for due card."""
@@ -149,7 +149,7 @@ class TrelloBot:
         del self._jobs[cid]
         del self._dues[cid]  # Removed associated due date
 
-    def _update_due(self, bid, ctx, jq):
+    async def _update_due(self, bid, ctx, jq):
         """Update due dates for given board."""
         # Iterate cards in board and add to due dates
         count = Counter()
@@ -174,7 +174,7 @@ class TrelloBot:
                     if c.dueComplete:
                         # If card is complete, ignore it
                         count['ignored'] += 1
-                    elif self._schedule_due(c, ctx, jq):
+                    elif await self._schedule_due(c, ctx, jq):
                         # Card were actually accepted for scheduling, likely
                         # because due date is in the future
                         count['scheduled'] += 1
@@ -205,7 +205,7 @@ class TrelloBot:
         scanned = set()
         for b in self._trello.fetch_boards():
             if not b.blacklisted:
-                c, s = self._update_due(b.id, ctx, job_queue)
+                c, s = await self._update_due(b.id, ctx, job_queue)
                 count += c
                 scanned.update(s)
         # Check for removed cards (TODO get notifications from trello?)
@@ -287,13 +287,17 @@ class TrelloBot:
         """Process user preferences."""
         tokens = self._get_args(ctx)
         try:
-            if tokens[1] == 'interval':
-                t = float(tokens[2])  # Index and value can fail
-                # Bound the maximum check interval in [30 seconds, 1 day]
-                TrelloBot.check_int = min(max(t, 0.3), 60 * 24)
-                await ctx.send(f'Interval set to {TrelloBot.check_int} minutes')
-                self._schedule_repeating_updates(ctx, job_queue)
-                # Accept changes
+            if tokens[1] == 'update':
+                if tokens[2] == 'interval':
+                    t = float(tokens[2])  # Index and value can fail
+                    # Bound the maximum check interval in [30 seconds, 1 day]
+                    TrelloBot.check_int = min(max(t, 0.3), 60 * 24)
+                    await ctx.send(f'Interval set to {TrelloBot.check_int} minutes')
+                    self._schedule_repeating_updates(ctx, job_queue)
+                    # Accept changes
+            elif tokens[1] == 'notification':
+                if tokens[2] == 'interval':
+                    await ctx.send('Not implemented yet')
             elif tokens[1] == 'quiet':
                 self._quiet = True
                 await ctx.send('I will be quieter now')
@@ -305,7 +309,8 @@ class TrelloBot:
             # TODO display current values as well
             await ctx.send(
                 f'*Settings help*\n'
-                f'/set interval [0.3:{60*24}] _update interval_\n'
+                f'/set update interval [0.3:{60*24}] _update interval_\n'
+                f'/set notification interval  [off|check|0.3:{60*24}] _notification interval_\n'
                 f'/set quiet _make bot quieter_\n'
                 f'/set verbose _make bot verbose_\n'
             )
