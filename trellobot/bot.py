@@ -1,10 +1,5 @@
 "s""Implementation of the actual bot."""
 
-# Telegram bot API
-from telegram.ext import Updater
-from telegram.ext import CommandHandler
-from telegram.ext import CallbackQueryHandler
-
 # Telegram served interface
 import telepot
 from telepot.aio.loop import MessageLoop
