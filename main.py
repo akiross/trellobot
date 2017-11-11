@@ -27,4 +27,5 @@ if __name__ == '__main__':
 
     # Create bot and run polling main loop
     tb = TrelloBot(trello_key, trello_secret, trello_token)
-    tb.run_bot(bot_key)
+    #tb.run_bot(bot_key)
+    tb.run_async(bot_key, bot_url='127.0.0.1:8080')

@@ -2,3 +2,4 @@ py-trello
 python-dateutil
 python-telegram-bot
 humanize
+telepot
