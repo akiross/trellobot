@@ -251,44 +251,41 @@ class TrelloBot:
         # TODO list cards due next 24 hours
         # TODO list cards completed in the last 24 hours
 
-    def ls(self, bot, update):
+    async def ls(self, ctx):
         """List the requested resources from Trello."""
         logging.info('Requested /ls')
-        for ctx in security_check(bot, update):
-            ctx.send(f'ECHO: {update.message}')
-            target = self._get_args(update)
-            # List organizations if nothing was specified
-            if len(target) == 1:
-                with ctx.spawn('Listing Organizations:\n') as msg:
-                    later = []
-                    for o in self._trello.fetch_orgs():
-                        if o.blacklisted:
-                            later.append(f' - {o.name}')
-                        else:
-                            msg.append(f' - {o.name}\n')
-                    # Print blacklisted organizations after
-                    if later:
-                        msg.append('Blacklisted:\n')
-                        msg.append('\n'.join(later))
-
-            elif len(target) == 2 and target[1] in self._trello.org_names():
-                org = target[1]
-                with ctx.spawn(f'Listing Boards in org {org}:\n') as msg:
-                    later = []
-                    for b, bl in self._trello.fetch_boards(org):
-                        if bl:
-                            later.append(f' - {b.name}')
-                        else:
-                            msg.append(f' - {b.name}\n')
-                    if later:
-                        msg.append('Blacklisted:\n')
-                        msg.append('\n'.join(later))
-            else:
-                ctx.send('Sorry, I cannot list anything else right now.')
+        target = self._get_args(ctx)
+        # List organizations if nothing was specified
+        if len(target) == 1:
+            async with await ctx.spawn('*Organizations:*\n') as msg:
+                later = []
+                for o in self._trello.fetch_orgs():
+                    if o.blacklisted:
+                        later.append(f' - {o.name}')
+                    else:
+                        await msg.append(f' - {o.name}\n')
+                # Print blacklisted organizations after
+                if later:
+                    await msg.append('Blacklisted:\n')
+                    await msg.append('\n'.join(later))
+        elif len(target) == 2 and target[1] in self._trello.org_names():
+            org = target[1]
+            async with await ctx.spawn(f'*Boards in org* {org}:\n') as msg:
+                later = []
+                for b in self._trello.fetch_boards(org):
+                    if b.blacklisted:
+                        later.append(f' - {b.name}')
+                    else:
+                        await msg.append(f' - {b.name}\n')
+                if later:
+                    await msg.append('Blacklisted:\n')
+                    await msg.append('\n'.join(later))
+        else:
+            await ctx.send('Sorry, I cannot list anything else right now.')
 
     async def preferences(self, ctx, job_queue):
         """Process user preferences."""
-        tokens = self._get_args(ctx.update)
+        tokens = self._get_args(ctx)
         try:
             if tokens[1] == 'interval':
                 t = float(tokens[2])  # Index and value can fail
@@ -317,7 +314,7 @@ class TrelloBot:
         """Whitelist organizations."""
         logging.info('Requested /wlo')
         # Get org IDS to whitelist
-        oids = self._get_args(ctx.update)
+        oids = self._get_args(ctx)
         for oid in oids:
             self._trello.whitelist_org(oid)
         # TODO update data and jobs
@@ -326,7 +323,7 @@ class TrelloBot:
         """Blacklist organizations."""
         logging.info('Requested /blo')
         # Get org IDs to whitelist
-        oids = self._get_args(ctx.update)
+        oids = self._get_args(ctx)
         for oid in oids:
             self._trello.blacklist_org(oid)
         # TODO  update data and jobs
@@ -352,7 +349,7 @@ class TrelloBot:
     async def wl_board(self, ctx):
         """Whitelist boards."""
         logging.info('Requested /wlb')
-        bids = self._get_args(ctx.update)
+        bids = self._get_args(ctx)
         if self._wlb(bids[1:]):
             await ctx.send('Boards whitelisted successfully.')
         else:
@@ -361,7 +358,7 @@ class TrelloBot:
     async def bl_board(self, ctx):
         """Blacklist boards."""
         logging.info('Requested /blb')
-        bids = self._get_args(ctx.update)
+        bids = self._get_args(ctx)
         if self._blb(bids[1:]):
             await ctx.send('Boards blacklisted successfully.')
         else:
@@ -472,10 +469,10 @@ class TrelloBot:
         delay = TrelloBot.check_int * 60.0
         self._job_check = job_queue.run_once(_cb, delay, ctx, job_queue)
 
-    def _get_args(self, update):
+    def _get_args(self, ctx):
         """Return a list of arguments from update message text."""
         logging.info('Getting argum')
-        return update.get('text').strip().split()
+        return ctx.update.get('text').strip().split()
 
     async def start(self, ctx, job_queue):
         """Start the bot, schedule tasks and printing welcome message."""

@@ -87,6 +87,7 @@ class Messenger:
         logging.info(f'Sending message {msg} with mode {self._mode}')
         keyboard = self._make_keyboard(keyboard)
         # Send formatted message with markup
+        self._text = msg
         self._msg = await self.bot.sendMessage(
             chat_id=self.chat_id,
             text=msg,
