@@ -3,11 +3,9 @@
 # Telegram served interface
 import telepot
 from telepot.aio.loop import MessageLoop
-from telepot.aio.delegate import pave_event_space, per_chat_id, create_open
 
 # Web served interface
 import asyncio
-import aiohttp
 from aiohttp import web
 
 # Some logging
@@ -23,7 +21,6 @@ from datetime import datetime
 from datetime import timezone
 
 from collections import Counter
-from contextlib import ExitStack
 
 
 def aware_now():
@@ -44,18 +41,6 @@ class JobQueue:
         loop = asyncio.get_event_loop()
         # TODO use functool partial to send kwargs
         return loop.call_later(delay, callback, *args)
-
-    #def run_daily(self, callback, time, *args):
-    #    """Schedule a callback to be executed at a specific time of the day.
-    #    
-    #    when must be a datetime.time object.
-    #    """
-    #    loop = asyncio.get_event_loop()
-    #    return loop.call_at()
-
-    #def run_repeating(self, callback, interval, *args):
-    #    """Schedule a callback to be executed repeatedly."""
-    #    pass
 
 
 class TrelloBot:
@@ -87,21 +72,6 @@ class TrelloBot:
             api_secret=trello_secret,
             token=trello_token,
         )
-
-    # def _schedule_notifications(self):
-    #    """Schedule notifications."""
-    #    """
-    #    È importante che si possano cancellare e rischedulare i job
-    #    quando si rinfresca l'elenco dei due date. I job pendenti devono
-    #    essere rimossi e rischedulati.
-    #
-    #    Usare job_queue.run_once(when=datetime.datetime) per specificare
-    #    precisamente quando devo notificare una due date.
-    #
-    #    Usare job_queue.run_daily(time=datetime.time) per specificare quando
-    #    bisogna notificare i task rimanenti della giornata (e.g. una volta al
-    #    mattino e una volta alla sera).
-    #    """
 
     def _card_notification(self, ctx, card):
         """Notify that a card is due shortly."""
@@ -244,7 +214,6 @@ class TrelloBot:
     async def check_updates(self, ctx, job_queue):
         """Check if new threads are present since last check."""
         logging.info('JOB: checking updates')
-        #update, job_queue = job.context
         await self._update(ctx, job_queue, self._quiet)
 
     async def check_notifications(self, ctx, job_queue):
@@ -364,7 +333,7 @@ class TrelloBot:
             self._trello.whitelist_org(oid)
         # TODO update data and jobs
 
-    async def bl_org(self, bot, update):
+    async def bl_org(self, ctx):
         """Blacklist organizations."""
         logging.info('Requested /blo')
         # Get org IDs to whitelist
@@ -412,13 +381,9 @@ class TrelloBot:
     async def upcoming_due(self, ctx):
         """Send user a list with upcoming cards."""
         logging.info('Requested /upcoming')
-        # Check if we loaded due cards
-        if not hasattr(self, '_dues'):
-            await ctx.send('No data fetched, did you start?')
-            return
         # Check all cards for upcoming dues
         pdm, cdm = '*Past dues*:', '*Dues*:'
-        async with await ctx.spawn(pdm) as pem, ctx.spawn(cdm) as fem:
+        async with await ctx.spawn(pdm) as pem, await ctx.spawn(cdm) as fem:
             # Show upcoming cards
             for dd in self._dues:
                 # Past dues in a separated list
@@ -429,8 +394,9 @@ class TrelloBot:
                     for c in self._dues[dd]:
                         await fem.append(f'\n - {c}')
 
-    async def today_due(self, bot, update):
+    async def today_due(self, ctx):
         """Send user a list with cards due today."""
+        logging.info('Requested /today')
         async with await ctx.spawn('*Due today*') as em:
             # Show upcoming cards
             for dd in self._dues:
@@ -456,16 +422,12 @@ class TrelloBot:
 
     async def _update_boards_lists(self, aem, bem, stm):
         """Update the message with current board status."""
-        # Get chat id for updating status messages
-        cid = aem.chat_id
-
         # Functions to get URLs for white/black-list boards
         def wlb_url(b):
             return f'[WL]({self.url}/api/{self.sec_tok}/wlb/{b.id})'
-                 # f'/{cid}/{aem.mid()}/{bem.mid()}/{stm.mid()})'
+
         def blb_url(b):
             return f'[BL]({self.url}/api/{self.sec_tok}/blb/{b.id})'
-                 # f'/{cid}/{aem.mid()}/{bem.mid()}/{stm.mid()})'
 
         # Set titles
         await aem.override('*Allowed boards*')
@@ -523,6 +485,7 @@ class TrelloBot:
         """(Re)schedule check_notifications to be repeated."""
         logging.info('Scheduling repeating notifications')
         self._cancel_repeating_notifications()
+
         def _cb(*args):
             async def _coro(c, jq):
                 await self.check_notifications(c, jq)
@@ -553,7 +516,7 @@ class TrelloBot:
         await self._update(ctx, job_queue, False)
         # Warn user about planned activity
         await ctx.send(f'Refreshing every {TrelloBot.update_int} mins',
-                 quiet=self._quiet)
+                       quiet=self._quiet)
 
         # Start repeated job
         self._schedule_repeating_updates(ctx, job_queue)
@@ -582,14 +545,6 @@ class TrelloBot:
                     ],
                 ]
             )
-        # Edit message connected to keyboard
-        # Keyboard is removed
-        # bot.edit_message_text(
-        #     text="Selected option: {}".format(query.data),
-        #     chat_id=query.message.chat_id,
-        #     message_id=query.message.message_id,
-        #
-        # )
 
     def errors(self, bot, update, error):
         logging.error(f'Got an error {error}')
@@ -608,11 +563,13 @@ class TrelloBot:
                 continue
 
             jq = JobQueue()
-            
+
             commands = {
                 '/start': (self.start, True),  # Needs job queue
                 '/update': (self.rescan_updates, True),  # Needs job queue
                 '/set': (self.preferences, True),  # Needs job queue
+                ('/upcoming', '/upc'): self.upcoming_due,
+                ('/today', '/tod'): self.today_due,
                 '/ls': self.ls,
                 '/wlo': self.wl_org,
                 '/blo': self.bl_org,
@@ -626,7 +583,7 @@ class TrelloBot:
                     fun, pass_job_queue = fun
                 else:
                     pass_job_queue = False
-                if token == cmd:
+                if token == cmd or isinstance(cmd, tuple) and token in cmd:
                     if pass_job_queue:
                         await fun(ctx, jq)
                     else:
@@ -644,22 +601,7 @@ class TrelloBot:
         if request.match_info.get('token') != self.sec_tok:
             return web.Response(text='Not authorized', status=401)
         bid = request.match_info.get('bid')
-        # cid = request.match_info.get('cid')
-        # amid = request.match_info.get('amid')
-        # bmid = request.match_info.get('bmid')
-        # smid = request.match_info.get('smid')
         if self._wlb([bid]):
-            # Create context for those messages
-            # wait = 'Please wait...'
-            # aem = Messenger.from_ref(self.bot, cid, amid)
-            # await aem._edit_text(wait)
-            # bem = Messenger.from_ref(self.bot, cid, bmid)
-            # await bem._edit_text(wait)
-            # stm = Messenger.from_ref(self.bot, cid, smid)
-            # await stm._edit_text(wait)
-            # await self._update_boards_lists(aem, bem, stm)
-            # loop = asyncio.get_event_loop()
-            # loop.create_task(refresh_last
             return web.Response(text='Board whitedlisted successfully.')
         return web.Response(text='Could not whitelist board.')
 
@@ -685,8 +627,6 @@ class TrelloBot:
         self.url = bot_url
 
         app = web.Application()
-        # app.router.add_get('/api/{token}/wlb/{bid}/{cid}/{amid}/{bmid}/{smid}', self.web_wlb)
-        # app.router.add_get('/api/{token}/blb/{bid}/{cid}/{amid}/{bmid}/{smid}', self.web_blb)
         app.router.add_get('/api/{token}/wlb/{bid}', self.web_wlb)
         app.router.add_get('/api/{token}/blb/{bid}', self.web_blb)
         loop = asyncio.get_event_loop()

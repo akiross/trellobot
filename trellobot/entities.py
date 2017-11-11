@@ -34,6 +34,6 @@ class Card(namedtuple('Card', 'id name url due dueComplete')):
     def __str__(self):
         """Card to string, markdown formatted."""
         if self.dueComplete:
-            return f'[\u2611](/unmark {self.id}) [{self.name}]({self.url})'
+            return f'\u2611 [{self.name}]({self.url})'
         else:
-            return f'[\u2610](/mark {self.id}) [{self.name}]({self.url})'
+            return f'\u2610 [{self.name}]({self.url})'

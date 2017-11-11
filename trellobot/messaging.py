@@ -10,8 +10,8 @@ class Messenger:
 
     parse_modes = {'md': 'Markdown', 'html': 'HTML'}
 
-    #@staticmethod
-    #def from_message(bot, update, msg_handler, parse_mode='md', bufsize=8):
+    # @staticmethod
+    # def from_message(bot, update, msg_handler, parse_mode='md', bufsize=8):
     #    """Build a new Messenger referring to a pre-existing message."""
     #    m = Messenger(bot, update, parse_mode=parse_mode, bufsize=bufsize)
     #    m._msg = msg_handler
@@ -25,8 +25,8 @@ class Messenger:
         m.msg_id = msg_id
         return m
 
-    #@staticmethod
-    #def from_query(bot, query, parse_mode='md', bufsize=8):
+    # @staticmethod
+    # def from_query(bot, query, parse_mode='md', bufsize=8):
     #    """Build a new Messenger tied to a query response."""
     #    return Messenger.from_message(bot, query, query.message,
     #                                  parse_mode, bufsize)
@@ -136,8 +136,8 @@ class Messenger:
     async def override(self, text, markdown=True, keyboard=None):
         """Replace the message with given text."""
         # If message is unchanged, server is unhappy: leave as-is if unchanged
-        #logging.info(f'Replacing message "{self._text}" with "{text}"')
-        #if self._text == text:
+        # logging.info(f'Replacing message "{self._text}" with "{text}"')
+        # if self._text == text:
         #    return
         self._text = text
         if keyboard is not None:
