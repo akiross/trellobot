@@ -7,6 +7,8 @@ import logging
 
 import trellobot.security as sec
 from trellobot.bot import TrelloBot
+import os
+
 
 if __name__ == '__main__':
     # Some logging
@@ -27,5 +29,4 @@ if __name__ == '__main__':
 
     # Create bot and run polling main loop
     tb = TrelloBot(trello_key, trello_secret, trello_token)
-    #tb.run_bot(bot_key)
-    tb.run_async(bot_key, bot_url='127.0.0.1:8080')
+    tb.run_async(bot_key, os.environ.get('TRELLOBOT_URL', '127.0.0.1:8080'))
