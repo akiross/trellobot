@@ -315,13 +315,12 @@ class TrelloBot:
                 await ctx.send('I will talk a bit more now')
         except Exception:
             # Whatever goes wrong
-            # TODO display current values as well
             await ctx.send(
                 f'*Settings help*\n'
-                f'/set update interval [0.3:{60*24}] _update interval (mins)_\n'
-                f'/set notification interval  [on|off|0.1:24] _notification interval (hours)_\n'
-                f'/set quiet _make bot quieter_\n'
-                f'/set verbose _make bot verbose_\n'
+                f'/set update interval [0.3:{60*24}] _update interval (mins)_ **Now:** {TrelloBot.update_int}\n'
+                f'/set notification interval  [on|off|0.1:24] _notification interval (hours)_ **Now:** {TrelloBot.notify_int}\n'
+                f'/set quiet _make bot quieter_ **Now:** {self._quiet}\n'
+                f'/set verbose _make bot verbose_ **Now:** {not self._quiet}\n'
             )
 
     async def wl_org(self, ctx):
