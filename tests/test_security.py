@@ -1,26 +1,38 @@
+import trellobot.security
 from trellobot.security import security_check
 from trellobot.messaging import Messenger
 from unittest.mock import MagicMock, patch
+import pytest
+import asyncio
 
 
-def test_security_check():
-    """Test security stuff."""
-    bot = MagicMock()
-    update = MagicMock()
-
-    # Set my chat id
-    update.message.chat_id = int(open('allowed.txt').read().strip())
-    # Check that right chat id will pass
-    for ctx in security_check(bot, update):
-        # We should enter the block
-        assert isinstance(ctx, Messenger)
-
-    # Change to unauth user
-    update.message.chat_id = 123456
+@pytest.mark.asyncio
+async def test_security_check(amocker):
+    """Test security check."""
+    # Mock the messenger: we don't have to send anything right now
     with patch('trellobot.security.Messenger') as mockmsg:
-        # Check that other chat id will not pass
-        for ctx in security_check(bot, update):
-            # We should NOT enter in this block
-            assert False
-        # Check that message was sent
-        assert mockmsg.call_count == 1
+        # Set what user is currently authorized
+        trellobot.security.authorized_user = 1234
+        # Mock an instance of Messenger
+        m = mockmsg()
+        # The send function is async def and must be mocked
+        m.send = amocker()
+        # Prepare an update from the user
+        update = {'chat': {'id': 1234}}
+        # Test security check passing
+        for ctx in await security_check(None, update):
+            assert ctx == m
+        # We are still not sure security_check returned a non-empty iterable!
+        # Messenger was called once, inside security_check, so check that
+        assert mockmsg.call_count == 2
+        # No message was sent
+        assert m.send.call_count == 0
+
+        # Test another user
+        update = {'chat': {'id': 4321}}
+        for ctx in await security_check(None, update):
+            assert False # This should never happen
+        # Another Messenger was created
+        assert mockmsg.call_count == 3
+        # A message was sent
+        assert m.send.call_count == 1

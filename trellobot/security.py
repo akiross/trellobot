@@ -16,6 +16,6 @@ async def security_check(bot, update, pm='md'):
         logging.info('Requested security check authorized')
         return [m]
     else:
-        logging.info('Requested security checkL authorized')
+        logging.info('Requested security check authorized')
         await m.send('You are not authorized.')
         return []

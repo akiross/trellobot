@@ -1,4 +1,7 @@
 -r requirements.txt
 flake8
 pytest
+pytest-aiohttp
+pytest-asyncio
+pytest-coverage
 pydocstyle
