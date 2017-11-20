@@ -242,14 +242,6 @@ class TrelloBot:
         # User requested an explicit update, so disable quiet mode
         await self._update(ctx, job_queue, False)
 
-    def daily_report(self, bot, job):
-        """Send a daily report about tasks."""
-        # TODO use security_check
-        # for ctx in security_check(bot, update):
-        pass
-        # TODO list cards due next 24 hours
-        # TODO list cards completed in the last 24 hours
-
     async def ls(self, ctx):
         """List the requested resources from Trello."""
         logging.info('Requested /ls')
@@ -405,20 +397,6 @@ class TrelloBot:
                 for c in self._dues[dd]:
                     await em.append(f'\n - {c}')
 
-    def demo(self, bot, update):
-        """Demo buttons and callbacks."""
-        # If security check passes
-        for ctx in security_check(bot, update):
-            ctx.send(f'A *markdown* message :)', keyboard=[
-                    [
-                        {'text': 'Greetings', 'callback_data': 'puny human'},
-                    ],
-                    [
-                        {'text': 'Adieu', 'callback_data': 'my friend'},
-                    ],
-                ]
-            )
-
     async def _update_boards_lists(self, aem, bem, stm):
         """Update the message with current board status."""
         # Functions to get URLs for white/black-list boards
@@ -522,32 +500,6 @@ class TrelloBot:
         self._schedule_repeating_notifications(ctx, job_queue)
         self.started = True
 
-    def buttons(self, bot, update):
-        """Handle buttons callbacks."""
-        query = update.callback_query
-        # Answer with a notification, without touching messages
-        bot.answerCallbackQuery(
-            query.id,
-            text='Baccalà baccaqua',  # A message to be sent to client
-            show_alert=True,  # If True, user gets a modal message
-        )
-        print(query.message)
-        with Messenger.from_query(bot, query) as msg:
-            msg.override(
-                'YAY FUNZIONA YEASH!',
-                keyboard=[
-                    [
-                        {'text': 'You are', 'callback_data': 'dead to me'},
-                    ],
-                    [
-                        {'text': 'My friend', 'callback_data': 'I hate you!'},
-                    ],
-                ]
-            )
-
-    def errors(self, bot, update, error):
-        logging.error(f'Got an error {error}')
-
     async def dispatch(self, update):
         """Dispatch chat messages."""
         logging.info(f'Got a message to dispatch {update}')
@@ -592,10 +544,6 @@ class TrelloBot:
                 await ctx.sendSticker('CAADBAADKwADRHraBbFYz9aWfY9kAg')
                 await ctx.send('I did not understand')
 
-    async def dispatch_cb(self, update):
-        """Dispatch call back updates."""
-        print('Bar', update)
-
     async def web_wlb(self, request):
         if request.match_info.get('token') != self.sec_tok:
             return web.Response(text='Not authorized', status=401)
@@ -618,7 +566,6 @@ class TrelloBot:
         self.bot = telepot.aio.Bot(bot_key)
         handlers = {
             'chat': self.dispatch,
-            'callback_query': self.dispatch_cb,
         }
 
         # Generate a security token
