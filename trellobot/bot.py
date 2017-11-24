@@ -1,9 +1,5 @@
 "s""Implementation of the actual bot."""
 
-# Telegram served interface
-import telepot
-from telepot.aio.loop import MessageLoop
-
 # Web served interface
 import asyncio
 from aiohttp import web
@@ -22,6 +18,8 @@ from datetime import timezone
 
 from collections import Counter
 
+from functools import partial
+
 
 def aware_now():
     """Return TZ-aware now."""
@@ -36,11 +34,10 @@ def tznaive(d):
 class JobQueue:
     """Manages async jobs."""
 
-    def run_once(self, callback, delay, *args):
+    def run_once(self, callback, delay, *args, **kwargs):
         """Schedule a callback to be executed after given delay (seconds)."""
         loop = asyncio.get_event_loop()
-        # TODO use functool partial to send kwargs
-        return loop.call_later(delay, callback, *args)
+        return loop.call_later(delay, partial(callback, *args, **kwargs))
 
 
 class TrelloBot:
@@ -84,11 +81,14 @@ class TrelloBot:
         """Schedule a job for due card, return True if actually enqueued."""
         # We are using time-aware dates, telegram API isn't:
         # convert to delay instead of using directly a datetime
+        # If card is complete, nothing happens
+        if card.dueComplete:
+            return False
         delay = (card.due - aware_now()).total_seconds()
         # If due date is past, we might handle it anyway
         if delay < 0:
             # Notify: you had a non-completed card in the last 24 hours!
-            if delay > -3600 * TrelloBot.past_due_notif_limit and not card.dueComplete:
+            if delay > -3600 * TrelloBot.past_due_notif_limit:
                 logging.info(f'Non-sched card with recently past due {card}')
                 self._pending_notifications.add(card)
             else:
@@ -562,6 +562,10 @@ class TrelloBot:
 
     def run_async(self, bot_key, bot_url):
         """Start the bot using asyncio."""
+        # Telegram served interface, imported here to avoid the cration
+        # of a main loop when importing the current module (bot.py)
+        from telepot.aio.loop import MessageLoop
+
         logging.info('Starting async bot')
         self.bot = telepot.aio.Bot(bot_key)
         handlers = {
