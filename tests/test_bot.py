@@ -14,6 +14,7 @@ from trellobot.bot import TrelloBot
 def in_a_bit(delay_sec):
     return aware_now() + timedelta(seconds=delay_sec)
 
+
 @pytest.mark.asyncio
 async def test_job_queue():
     """Test that job queue works as expected."""
@@ -105,3 +106,15 @@ async def test_bot_schedule_due(amocker):
     future_card.dueComplete = False
     assert await bot._schedule_due(ctx, future_card, job_queue)
     job_queue.run_once.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_bot_update_due(amocker):
+    """Test that when cards change, corecct scheduling is performed."""
+
+    with patch() as trmk:
+        bot = TrelloBot('k', 's', 't')
+        ctx = MagicMock()
+        ctx.send = amocker()
+        job_queue = MagicMock()
+

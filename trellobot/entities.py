@@ -20,12 +20,12 @@ class Board(namedtuple('Board', 'id name blacklisted url')):
         return f'[{self.name}]({self.url})'
 
 
-class List(namedtuple('List', 'id name url')):
+class List(namedtuple('List', 'id name idBoard subscribed')):
     """A Trello list."""
 
     def __str__(self):
         """List to string, markdown formatted."""
-        return f'[{self.name}]({self.url})'
+        return f'{self.name}'
 
 
 class Card(namedtuple('Card', 'id name url due dueComplete')):

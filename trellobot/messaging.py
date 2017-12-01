@@ -17,13 +17,13 @@ class Messenger:
     #    m._msg = msg_handler
     #    return m
 
-    @staticmethod
-    def from_ref(bot, chat_id, msg_id, parse_mode='md', bufsize=10):
-        """Build a new Messenger referring to a pre-existing message."""
-        m = Messenger(bot, {}, parse_mode=parse_mode, bufsize=bufsize)
-        m.chat_id = chat_id
-        m.msg_id = msg_id
-        return m
+    # @staticmethod
+    # def from_ref(bot, chat_id, msg_id, parse_mode='md', bufsize=10):
+    #     """Build a new Messenger referring to a pre-existing message."""
+    #     m = Messenger(bot, {}, parse_mode=parse_mode, bufsize=bufsize)
+    #     m.chat_id = chat_id
+    #     m.msg_id = msg_id
+    #     return m
 
     # @staticmethod
     # def from_query(bot, query, parse_mode='md', bufsize=8):
@@ -45,11 +45,11 @@ class Messenger:
         self._text = ''
         self._keyboard = []
 
-    def mid(self):
-        """Return message id this context is (possibly) referring to."""
-        if hasattr(self, 'msg_id'):
-            return self.msg_id
-        return None
+    # def mid(self):
+    #     """Return message id this context is (possibly) referring to."""
+    #     if hasattr(self, 'msg_id'):
+    #         return self.msg_id
+    #     return None
 
     async def spawn(self, message=None, bufsize=10, quiet=False):
         """Spawn a new messenger with same bot, update and parse mode."""

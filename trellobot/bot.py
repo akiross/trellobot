@@ -1,4 +1,4 @@
-"s""Implementation of the actual bot."""
+"""Implementation of the actual bot."""
 
 # Web served interface
 import asyncio
@@ -63,6 +63,8 @@ class TrelloBot:
         self._pending_notifications = set()
         # Try to be as quiet as possible (remember: user can mute it)
         self._quiet = True
+        # What lists are we inserting TODOs?
+        self._todo_list = None
 
         self._trello = TrelloManager(
             api_key=trello_key,
@@ -242,37 +244,67 @@ class TrelloBot:
         # User requested an explicit update, so disable quiet mode
         await self._update(ctx, job_queue, False)
 
-    async def ls(self, ctx):
-        """List the requested resources from Trello."""
-        logging.info('Requested /ls')
-        target = self._get_args(ctx)
-        # List organizations if nothing was specified
-        if len(target) == 1:
-            async with await ctx.spawn('*Organizations:*\n') as msg:
-                later = []
-                for o in self._trello.fetch_orgs():
-                    if o.blacklisted:
-                        later.append(f' - {o.name}')
-                    else:
-                        await msg.append(f' - {o.name}\n')
-                # Print blacklisted organizations after
-                if later:
-                    await msg.append('Blacklisted:\n')
-                    await msg.append('\n'.join(later))
-        elif len(target) == 2 and target[1] in self._trello.org_names():
-            org = target[1]
-            async with await ctx.spawn(f'*Boards in org* {org}:\n') as msg:
-                later = []
-                for b in self._trello.fetch_boards(org):
-                    if b.blacklisted:
-                        later.append(f' - {b.name}')
-                    else:
-                        await msg.append(f' - {b.name}\n')
-                if later:
-                    await msg.append('Blacklisted:\n')
-                    await msg.append('\n'.join(later))
+    async def lso(self, ctx):
+        """List organizations."""
+        logging.info('Requested /lso')
+        async with await ctx.spawn('*Organizations:*\n') as msg:
+            later = []
+            for o in self._trello.fetch_orgs():
+                if o.blacklisted:
+                    later.append(f' - {o} {o.id}')
+                else:
+                    await msg.append(f' - {o} {o.id}\n')
+            # Print blacklisted organizations after
+            if later:
+                await msg.append('Blacklisted:\n')
+                await msg.append('\n'.join(later))
+
+    async def lsb(self, ctx):
+        """List boards, optionally filtering by organization."""
+        logging.info('Requested /lsb')
+        args = self._get_args(ctx)
+        if len(args) > 1:
+            org = args[1]
         else:
-            await ctx.send('Sorry, I cannot list anything else right now.')
+            org = None
+        async with await ctx.spawn(f'*Boards in* {org}:\n') as msg:
+            later = []
+            for b in self._trello.fetch_boards(org):
+                if b.blacklisted:
+                    later.append(f' - {b} {b.id}')
+                else:
+                    await msg.append(f' - {b} {b.id}\n')
+            if later:
+                await msg.append('Blacklisted:\n')
+                await msg.append('\n'.join(later))
+
+    async def lsl(self, ctx):
+        """List lists in the specified board."""
+        logging.info('Requested /lsl')
+        args = self._get_args(ctx)
+        bid = None
+        if len(args) == 2:
+            # Search for a matching board ID
+            for b in self._trello.fetch_boards():
+                if args[1] == b.id:
+                    bid = b.id
+                    break
+        elif len(args) == 3:
+            # Search for a board matching by ID or name
+            org = args[1]
+            brd = args[2]
+            for b in self._trello.fetch_boards(org):
+                if brd == b.id or brd == b.name:
+                    bid = b.id
+                    break
+        # We need a board ID, error and quit if missing
+        if bid is None:
+            await ctx.send('I need at least a board ID, or an org and board')
+            return
+
+        async with await ctx.spawn(f'*Lists in* {bid}:\n') as msg:
+            for l in self._trello.fetch_lists(bid):
+                await msg.append(f' - {l} {l.id}\n')
 
     async def preferences(self, ctx, job_queue):
         """Process user preferences."""
@@ -305,6 +337,9 @@ class TrelloBot:
             elif tokens[1] == 'verbose':
                 self._quiet = False
                 await ctx.send('I will talk a bit more now')
+            elif tokens[1] == 'todo':
+                self._todo_list = tokens[2]
+                await ctx.send('The default todo list has ben set')
         except Exception:
             # Whatever goes wrong
             await ctx.send(
@@ -313,7 +348,20 @@ class TrelloBot:
                 f'/set notification interval  [on|off|0.1:24] _notification interval (hours)_ **Now:** {TrelloBot.notify_int}\n'
                 f'/set quiet _make bot quieter_ **Now:** {self._quiet}\n'
                 f'/set verbose _make bot verbose_ **Now:** {not self._quiet}\n'
+                f'/set todo [list ID] **Now:** {self._todo_list}\n'
             )
+
+    async def add_todo(self, ctx):
+        '''Add a todo in the default list.'''
+        if self._todo_list is None:
+            await ctx.send('There is no default list set. Please use /set todo')
+        else:
+            # TODO extract lid from parameters when adding cards NOT in TODO
+            message = ctx.update.get('text').strip()
+            space = message.index(' ')
+            message = message[space:].lstrip()
+            card = self._trello.create_card(self._todo_list, message)
+            await ctx.send(f'Added TODO as card {card}')
 
     async def wl_org(self, ctx):
         """Whitelist organizations."""
@@ -520,8 +568,12 @@ class TrelloBot:
                 '/update': (self.rescan_updates, True),  # Needs job queue
                 '/set': (self.preferences, True),  # Needs job queue
                 ('/upcoming', '/upc'): self.upcoming_due,
-                ('/today', '/tod'): self.today_due,
-                '/ls': self.ls,
+                '/today': self.today_due,
+                # '/add': self.add_card,
+                '/todo': self.add_todo,  # TODO fallback per i messaggi non compresi
+                '/lso': self.lso,
+                '/lsb': self.lsb,
+                '/lsl': self.lsl,
                 '/wlo': self.wl_org,
                 '/blo': self.bl_org,
                 '/wlb': self.wl_board,
@@ -542,7 +594,7 @@ class TrelloBot:
                     break
             else:
                 await ctx.sendSticker('CAADBAADKwADRHraBbFYz9aWfY9kAg')
-                await ctx.send('I did not understand')
+                await ctx.send('I did not understand!')
 
     async def web_wlb(self, request):
         if request.match_info.get('token') != self.sec_tok:
@@ -564,6 +616,7 @@ class TrelloBot:
         """Start the bot using asyncio."""
         # Telegram served interface, imported here to avoid the cration
         # of a main loop when importing the current module (bot.py)
+        import telepot
         from telepot.aio.loop import MessageLoop
 
         logging.info('Starting async bot')

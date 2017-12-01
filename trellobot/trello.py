@@ -3,7 +3,7 @@
 
 from trello import TrelloClient
 from dateutil.parser import parse as parse_date
-from trellobot.entities import Organization, Board, Card
+from trellobot.entities import Organization, Board, List, Card
 import logging
 
 
@@ -80,11 +80,10 @@ class TrelloManager:
                 bl = b['id'] not in self._wl_brd
                 yield Board(b['id'], b['name'], bl, b['url'])
 
-    def fetch_lists(self, board):
+    def fetch_lists(self, bid):
         """Generate lists in given board."""
-        raise NotImplemented
-        # for l in board.list_lists():
-        #    yield l
+        for l in self._cl.fetch_json(f'/boards/{bid}/lists'):
+            yield List(l['id'], l['name'], l['idBoard'], l['subscribed'])
 
     def fetch_cards(self, lid=None, bid=None):
         """Generate cards from list, board or everything."""
@@ -101,25 +100,10 @@ class TrelloManager:
             yield Card(c['id'], c['name'],
                        c['url'], c['due'], c['dueComplete'])
 
-    def deprecated_fetch_data(self):
-        """Fetch all the data from the server, updating cache."""
-        logging.info('TrelloManager: fetching_data list_organizations')
-        self._orgs = []
-        self._boards = []
-        self._lists = []
-        self._cards = []
-        for o in self.fetch_orgs():
-            # Skip blacklisted boards
-            if o.blacklisted:
-                continue
-            self._orgs.append(o)
-            for b, bbl in self.fetch_boards(o):
-                # Skip blacklisted boards
-                if bbl:
-                    continue
-                self._boards.append(b)
-                for l in self.fetch_lists(b):
-                    self._lists.append(l)
-                    for c in self.fetch_cards(l):
-                        self._cards.append(c)
-                        yield (o, b, l, c)
+    def create_card(self, lid, name):
+        """Create a card inside the specified list."""
+        c = self._cl.fetch_json(f'/cards', http_method='POST', post_args={
+            'idList': lid,
+            'name': name,
+        })
+        return Card(c['id'], c['name'], c['url'], c['due'], c['dueComplete'])

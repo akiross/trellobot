@@ -31,7 +31,8 @@ async def test_security_check(amocker):
         # Test another user
         update = {'chat': {'id': 4321}}
         for ctx in await security_check(None, update):
-            assert False # This should never happen
+            # This should never happen
+            assert False  # pragma: no cover
         # Another Messenger was created
         assert mockmsg.call_count == 3
         # A message was sent
