@@ -19,6 +19,7 @@ from datetime import timezone
 from collections import Counter
 
 from functools import partial
+import traceback
 
 
 def aware_now():
@@ -338,9 +339,14 @@ class TrelloBot:
                 self._quiet = False
                 await ctx.send('I will talk a bit more now')
             elif tokens[1] == 'todo':
-                self._todo_list = tokens[2]
-                await ctx.send('The default todo list has ben set')
-        except Exception:
+                async with await ctx.spawn(f'Checking...') as msg:
+                    lid = tokens[2].strip()
+                    if lid in (l.id for l in self._trello.fetch_lists()):
+                        await msg.override('Default todo list has ben set')
+                    else:
+                        await msg.override('No such list')
+        except Exception as exc:
+            traceback.print_tb(exc.__traceback__)
             # Whatever goes wrong
             await ctx.send(
                 f'*Settings help*\n'

@@ -80,10 +80,15 @@ class TrelloManager:
                 bl = b['id'] not in self._wl_brd
                 yield Board(b['id'], b['name'], bl, b['url'])
 
-    def fetch_lists(self, bid):
+    def fetch_lists(self, bid=None):
         """Generate lists in given board."""
-        for l in self._cl.fetch_json(f'/boards/{bid}/lists'):
-            yield List(l['id'], l['name'], l['idBoard'], l['subscribed'])
+        # Use all boards if none was specified
+        bids = list(b.id for b in self.fetch_boards()) if bid is None else [bid]
+        # Yield all the lists
+        for b in bids:
+            for l in self._cl.fetch_json(f'/boards/{b}/lists'):
+                logging.info('Got list ' + l['id'])
+                yield List(l['id'], l['name'], l['idBoard'], l['subscribed'])
 
     def fetch_cards(self, lid=None, bid=None):
         """Generate cards from list, board or everything."""
