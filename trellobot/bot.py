@@ -8,8 +8,8 @@ from aiohttp import web
 import logging
 import secrets
 
+import trellobot.security as security
 from trellobot.messaging import Messenger
-from trellobot.security import security_check
 from trellobot.trello import TrelloManager
 
 import humanize
@@ -268,16 +268,28 @@ class TrelloBot:
             org = args[1]
         else:
             org = None
+        def lsl_url(b):
+            return f'[lsl]({self.url}/api/{self.sec_tok}/lsl/{b.id})'
         async with await ctx.spawn(f'*Boards in* {org}:\n') as msg:
             later = []
             for b in self._trello.fetch_boards(org):
                 if b.blacklisted:
-                    later.append(f' - {b} {b.id}')
+                    later.append(f' - {b} {lsl_url(b)}')
                 else:
-                    await msg.append(f' - {b} {b.id}\n')
+                    await msg.append(f' - {b} {lsl_url(b)}\n')
             if later:
                 await msg.append('Blacklisted:\n')
                 await msg.append('\n'.join(later))
+
+    async def _lsl(self, bid):
+        def set_default(l):
+            return f'[TODO]({self.url}/api/{self.sec_tok}/set/todo/{l.id})'
+
+        fake_update = {'chat': {'id': security.authorized_user}}
+        ctx = Messenger(self.bot, fake_update)
+        async with await ctx.spawn(f'*Lists in* {bid}:\n') as msg:
+            for l in self._trello.fetch_lists(bid):
+                await msg.append(f' - {l} {l.id} {set_default(l)}\n')
 
     async def lsl(self, ctx):
         """List lists in the specified board."""
@@ -302,10 +314,14 @@ class TrelloBot:
         if bid is None:
             await ctx.send('I need at least a board ID, or an org and board')
             return
+        await self._lsl(bid)
 
-        async with await ctx.spawn(f'*Lists in* {bid}:\n') as msg:
-            for l in self._trello.fetch_lists(bid):
-                await msg.append(f' - {l} {l.id}\n')
+    async def web_lsl(self, request):
+        if request.match_info.get('token') != self.sec_tok:
+            return web.Response(text='Not authorized', status=401)
+        bid = request.match_info.get('bid')
+        await self._lsl(bid)
+        return web.Response(text='Listing board contents.')
 
     async def preferences(self, ctx, job_queue):
         """Process user preferences."""
@@ -340,9 +356,8 @@ class TrelloBot:
                 await ctx.send('I will talk a bit more now')
             elif tokens[1] == 'todo':
                 async with await ctx.spawn(f'Checking...') as msg:
-                    lid = tokens[2].strip()
-                    if lid in (l.id for l in self._trello.fetch_lists()):
-                        await msg.override('Default todo list has ben set')
+                    if self._set_todo(tokens[2].strip()):
+                        await msg.override('Default list has ben set')
                     else:
                         await msg.override('No such list')
         except Exception as exc:
@@ -356,6 +371,19 @@ class TrelloBot:
                 f'/set verbose _make bot verbose_ **Now:** {not self._quiet}\n'
                 f'/set todo [list ID] **Now:** {self._todo_list}\n'
             )
+
+    def _set_todo(self, lid):
+        """Verify if the list ID is valid and can be used to set TODO."""
+        return True  # Let's trust the system...
+        return lid in (l.id for l in self._trello.fetch_lists())
+
+    async def web_set_todo(self, request):
+        if request.match_info.get('token') != self.sec_tok:
+            return web.Response(text='Not authorized', status=401)
+        lid = request.match_info.get('lid')
+        if self._set_todo(lid):
+            return web.Response(text='Default list changed.')
+        return web.Response(text='Invalid identifier.')
 
     async def add_todo(self, ctx):
         '''Add a todo in the default list.'''
@@ -460,6 +488,9 @@ class TrelloBot:
         def blb_url(b):
             return f'[BL]({self.url}/api/{self.sec_tok}/blb/{b.id})'
 
+        def lsl_url(b):
+            return f'[lsl]({self.url}/api/{self.sec_tok}/lsl/{b.id})'
+
         # Set titles
         await aem.override('*Allowed boards*')
         await bem.override('*Not allowed boards*')
@@ -474,9 +505,9 @@ class TrelloBot:
         # Fetch boards and update messages
         for b in self._trello.fetch_boards():
             if b.blacklisted:
-                await bem.append(f'\n - {b} ({wlb_url(b)})')
+                await bem.append(f'\n - {b} ({wlb_url(b)}) {lsl_url(b)}')
             else:
-                await aem.append(f'\n - {b} ({blb_url(b)})')
+                await aem.append(f'\n - {b} ({blb_url(b)}) {lsl_url(b)}')
 
         await asyncio.sleep(1)
 
@@ -557,7 +588,7 @@ class TrelloBot:
     async def dispatch(self, update):
         """Dispatch chat messages."""
         logging.info(f'Got a message to dispatch {update}')
-        for ctx in await security_check(self.bot, update):
+        for ctx in await security.security_check(self.bot, update):
             print('Security check passed')
 
             # Dispatch based on first token received
@@ -636,8 +667,10 @@ class TrelloBot:
         self.url = bot_url
 
         app = web.Application()
+        app.router.add_get('/api/{token}/set/todo/{lid}', self.web_set_todo)
         app.router.add_get('/api/{token}/wlb/{bid}', self.web_wlb)
         app.router.add_get('/api/{token}/blb/{bid}', self.web_blb)
+        app.router.add_get('/api/{token}/lsl/{bid}', self.web_lsl)
         loop = asyncio.get_event_loop()
         loop.create_task(MessageLoop(self.bot, handlers).run_forever())
         web.run_app(app)
