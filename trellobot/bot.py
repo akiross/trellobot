@@ -374,8 +374,11 @@ class TrelloBot:
 
     def _set_todo(self, lid):
         """Verify if the list ID is valid and can be used to set TODO."""
-        return True  # Let's trust the system...
-        return lid in (l.id for l in self._trello.fetch_lists())
+        # res = lid in (l.id for l in self._trello.fetch_lists())
+        res = True  # Let's trust the system...
+        if res:
+            self._todo_list = lid
+        return res
 
     async def web_set_todo(self, request):
         if request.match_info.get('token') != self.sec_tok:
