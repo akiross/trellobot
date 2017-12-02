@@ -508,10 +508,13 @@ class TrelloBot:
                 await bem.append(f'\n - {b} ({wlb_url(b)}) {lsl_url(b)}')
             else:
                 await aem.append(f'\n - {b} ({blb_url(b)}) {lsl_url(b)}')
-
+        # Write all data
+        await aem.flush()
+        await bem.flush()
+        # Mark as done
         await asyncio.sleep(1)
-
         await stm.override(f'*Status*: Done.')
+        await stm.flush()
 
     async def _list_boards(self, ctx):
         """Send two messages and fill them with wl/bl boards."""

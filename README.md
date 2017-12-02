@@ -36,9 +36,14 @@ created earlier in this directory. TrelloBot will read the files from there.
 
 Next, you'll have to build the Docker image and run it. Should be easy:
 
-    cd trellobot  # Enter source directory, containing your keys
-	docker build -t trellobot .  # Create docker image using current Dockerfile
-	docker run --rm -ti trellobot  # Actually run the image in a container
+	# Enter source directory, containing your keys
+    cd trellobot
+
+	# Create docker image using current Dockerfile
+	docker build -t trellobot .
+
+	# Run the bot as a daemon on your domain example.com on port 1234
+	docker run -d -p 1234:8080 -e TRELLOBOT_URL=example.com:1234 trellobot
 
 If everything is fine (and it should be), you'll start to see logging and your
 bot will be available. If it's not working, double-check these steps and, if
