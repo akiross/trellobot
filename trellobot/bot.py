@@ -93,6 +93,7 @@ class TrelloBot:
             # Notify: you had a non-completed card in the last 24 hours!
             if delay > -3600 * TrelloBot.past_due_notif_limit:
                 logging.info(f'Non-sched card with recently past due {card}')
+                self._dues[card.id] = card.due  # TODO devo salvare questa card?
                 self._pending_notifications.add(card)
             else:
                 logging.info(f'Non-sched card with far past due {card}')
@@ -105,6 +106,8 @@ class TrelloBot:
             if delay < 0:
                 logging.info(f'Non-scheduling card due soon {card}')
                 await ctx.send(f'Card {card} is due soon!')
+                # Add the card to upcoming cards
+                self._dues[card.id] = card.due
                 return False
             else:
                 logging.info(f'Scheduling card due in future {card}')
@@ -210,7 +213,7 @@ class TrelloBot:
             stm = '*Status*: Scanning for updates...'
             async with await ctx.spawn(stm) as msg:
                 # Get data, caching them
-                count = await self._check_due(msg, job_queue)
+                count = await self._check_due(ctx, job_queue)
                 # n = len(list(self._trello.fetch_data()))
                 await msg.override(f'*Status*: Done. ' + self._report(count))
 
@@ -454,32 +457,66 @@ class TrelloBot:
         else:
             await self._list_boards(ctx)
 
+    # FIXME this is not upcoming, this is "uncompleted cards"
     async def upcoming_due(self, ctx):
         """Send user a list with upcoming cards."""
         logging.info('Requested /upcoming')
         # Check all cards for upcoming dues
         pdm, cdm = '*Past dues*:', '*Dues*:'
         async with await ctx.spawn(pdm) as pem, await ctx.spawn(cdm) as fem:
+            # Fetch all the cards in whitelisted boards
+            for b in self._trello.fetch_boards():
+                if b.blacklisted:
+                    continue
+                print('Got board', b.name)
+                for c in self._trello.fetch_cards(bid=b.id):
+                    if c.dueComplete or c.due is None:
+                        continue
+                    if c.due < aware_now():
+                        await pem.append(f'\n - {c}')
+                    else:
+                        await fem.append(f'\n - {c}')
+
+        # Old code below
+        if False:
             # Show upcoming cards
             for dd in self._dues:
+                card = self._trello.get_card(dd)
+                # print('Processing card', dd, self._dues[dd])
                 # Past dues in a separated list
-                if dd < aware_now():
-                    for c in self._dues[dd]:
-                        await pem.append(f'\n - {c}')
+                if self._dues[dd] < aware_now():
+                    #for c in self._dues[dd]:
+                    await pem.append(f'\n - {card}')
                 else:
-                    for c in self._dues[dd]:
-                        await fem.append(f'\n - {c}')
+                    #for c in self._dues[dd]:
+                    await fem.append(f'\n - {card}')
 
     async def today_due(self, ctx):
         """Send user a list with cards due today."""
         logging.info('Requested /today')
-        async with await ctx.spawn('*Due today*') as em:
-            # Show upcoming cards
-            for dd in self._dues:
-                # Skip past due
-                if dd.date() != aware_now().date():
+        pdm, cdm = '*Past dues today*:', '*Due today*:'
+        async with await ctx.spawn(pdm) as pem, await ctx.spawn(cdm) as fem:
+            # Fetch all the cards in whitelisted boards and filter by day
+            for b in self._trello.fetch_boards():
+                if b.blacklisted:
                     continue
-                for c in self._dues[dd]:
+                for c in self._trello.fetch_cards(bid=b.id):
+                    if c.dueComplete or c.due is None:
+                        continue
+                    # Divide past dues still missing today
+                    now = aware_now()
+                    if c.due.date() == now.date():
+                        if c.due < now:
+                            await pem.append(f'\n - {c}')
+                        else:
+                            await fem.append(f'\n - {c}')
+            if False:
+                #da_fare: leggere le card da trello e trovare tutte quelle pending
+                for dd in self._dues:
+                    # Skip past due
+                    if dd.date() != aware_now().date():
+                        continue
+                    #for c in self._dues[dd]:
                     await em.append(f'\n - {c}')
 
     async def _update_boards_lists(self, aem, bem, stm):
@@ -591,6 +628,10 @@ class TrelloBot:
         self._schedule_repeating_notifications(ctx, job_queue)
         self.started = True
 
+    # async def circles(self, ctx):
+    #     """Generate circles and send it."""
+    #     await ctx.sendPhoto()
+
     async def dispatch(self, update):
         """Dispatch chat messages."""
         logging.info(f'Got a message to dispatch {update}')
@@ -610,6 +651,7 @@ class TrelloBot:
                 '/start': (self.start, True),  # Needs job queue
                 '/update': (self.rescan_updates, True),  # Needs job queue
                 '/set': (self.preferences, True),  # Needs job queue
+                # "Always-fresh" commands: they read directly from trello
                 ('/upcoming', '/upc'): self.upcoming_due,
                 '/today': self.today_due,
                 # '/add': self.add_card,
@@ -621,6 +663,7 @@ class TrelloBot:
                 '/blo': self.bl_org,
                 '/wlb': self.wl_board,
                 '/blb': self.bl_board,
+                # '/circles': self.circles,
             }
 
             token = text.split()[0]

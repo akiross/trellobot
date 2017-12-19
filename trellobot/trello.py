@@ -90,6 +90,13 @@ class TrelloManager:
                 logging.info('Got list ' + l['id'])
                 yield List(l['id'], l['name'], l['idBoard'], l['subscribed'])
 
+    def get_card(self, cid):
+        """Get a card by ID."""
+        c = self._cl.fetch_json(f'/cards/{cid}')
+        if c['due'] is not None:
+            c['due'] = parse_date(c['due'])
+        return Card(c['id'], c['name'], c['url'], c['due'], c['dueComplete'])
+
     def fetch_cards(self, lid=None, bid=None):
         """Generate cards from list, board or everything."""
         if bid is not None:
