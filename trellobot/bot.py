@@ -48,6 +48,7 @@ class TrelloBot:
     notify_int = 2  # Notification interval in hours
     past_due_notif_limit = 24  # Time limit for past due to consider, in hours
     due_soon_notif_limit = 1  # Time limit for due soon to consider time limit, in hours
+    todo_as_default = True  # When a message is not understood, add it to todos
 
     def __init__(self, trello_key, trello_secret, trello_token):
         """Initialize a TrelloBot, reading key files."""
@@ -398,8 +399,9 @@ class TrelloBot:
         else:
             # TODO extract lid from parameters when adding cards NOT in TODO
             message = ctx.update.get('text').strip()
-            space = message.index(' ')
-            message = message[space:].lstrip()
+            if message.startswith('/'):
+                space = message.index(' ')
+                message = message[space:].lstrip()
             card = self._trello.create_card(self._todo_list, message)
             await ctx.send(f'Added TODO as card {card}')
 
@@ -667,6 +669,9 @@ class TrelloBot:
             }
 
             token = text.split()[0]
+            if token == '/help':
+                await ctx.send('Accepted commands:\nstart, update, set, upc, today, todo, lso, lsb, lsl, wlo, blo, wlb, wlb')
+                return
             for cmd, fun in commands.items():
                 if isinstance(fun, tuple):
                     fun, pass_job_queue = fun
@@ -679,8 +684,12 @@ class TrelloBot:
                         await fun(ctx)
                     break
             else:
-                await ctx.sendSticker('CAADBAADKwADRHraBbFYz9aWfY9kAg')
-                await ctx.send('I did not understand!')
+                if TrelloBot.todo_as_default and not token.startswith('/'):
+                    # Add todo as default
+                    await self.add_todo(ctx)
+                else:
+                    await ctx.sendSticker('CAADBAADKwADRHraBbFYz9aWfY9kAg')
+                    await ctx.send('I did not understand!')
 
     async def web_wlb(self, request):
         if request.match_info.get('token') != self.sec_tok:
