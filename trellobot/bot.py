@@ -212,7 +212,7 @@ class TrelloBot:
             await self._check_due(ctx, job_queue)
         else:
             stm = '*Status*: Scanning for updates...'
-            async with await ctx.spawn(stm) as msg:
+            async with await ctx.spawn(stm, quiet=True) as msg:
                 # Get data, caching them
                 count = await self._check_due(ctx, job_queue)
                 # n = len(list(self._trello.fetch_data()))
@@ -338,6 +338,8 @@ class TrelloBot:
                     TrelloBot.update_int = min(max(t, 0.3), 60 * 24)
                     await ctx.send(f'Interval set to {TrelloBot.update_int} minutes')
                     self._schedule_repeating_updates(ctx, job_queue)
+                else:
+                    await ctx.send(f'Unknown option')
             elif tokens[1] == 'notification':
                 if tokens[2] == 'interval':
                     if tokens[3] == 'off':
@@ -352,6 +354,8 @@ class TrelloBot:
                         TrelloBot.notify_int = min(max(t, 0.1), 24)
                         await ctx.send(f'Interval set to {TrelloBot.notify_int} hours')
                         self._schedule_repeating_notifications(ctx, job_queue)
+                else:
+                    await ctx.send(f'Unknown option')
             elif tokens[1] == 'quiet':
                 self._quiet = True
                 await ctx.send('I will be quieter now')

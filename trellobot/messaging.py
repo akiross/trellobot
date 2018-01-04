@@ -51,10 +51,12 @@ class Messenger:
     #         return self.msg_id
     #     return None
 
-    async def spawn(self, message=None, bufsize=10, quiet=False):
+    async def spawn(self, message=None, bufsize=10, quiet=None):
         """Spawn a new messenger with same bot, update and parse mode."""
-        m = Messenger(self.bot, self.update,
-                      self._mode, bufsize, self._quiet)
+        if quiet is None:
+            # If not specified, use the inherited value
+            quiet = self._quiet
+        m = Messenger(self.bot, self.update, self._mode, bufsize, quiet)
         await m.send(message)
         return m
 
