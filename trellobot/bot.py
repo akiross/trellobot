@@ -459,12 +459,11 @@ class TrelloBot:
         else:
             await self._list_boards(ctx)
 
-    # FIXME this is not upcoming, this is "uncompleted cards"
-    async def upcoming_due(self, ctx):
-        """Send user a list with upcoming cards."""
-        logging.info('Requested /upcoming')
+    async def missing_dues(self, ctx):
+        """Send user a list with incomplete cards."""
+        logging.info('Requested /missing')
         # Check all cards for upcoming dues
-        pdm, cdm = '*Past dues*:', '*Dues*:'
+        pdm, cdm = '*Past missing dues*:', '*Missing*:'
         async with await ctx.spawn(pdm) as pem, await ctx.spawn(cdm) as fem:
             # Fetch all the cards in whitelisted boards
             for b in self._trello.fetch_boards():
@@ -479,26 +478,13 @@ class TrelloBot:
                     else:
                         await fem.append(f'\n - {c}')
 
-        # Old code below
-        if False:
-            # Show upcoming cards
-            for dd in self._dues:
-                card = self._trello.get_card(dd)
-                # print('Processing card', dd, self._dues[dd])
-                # Past dues in a separated list
-                if self._dues[dd] < aware_now():
-                    #for c in self._dues[dd]:
-                    await pem.append(f'\n - {card}')
-                else:
-                    #for c in self._dues[dd]:
-                    await fem.append(f'\n - {card}')
-
     async def today_due(self, ctx):
         """Send user a list with cards due today."""
         logging.info('Requested /today')
         pdm, cdm = '*Past dues today*:', '*Due today*:'
         async with await ctx.spawn(pdm) as pem, await ctx.spawn(cdm) as fem:
             # Fetch all the cards in whitelisted boards and filter by day
+            now = aware_now()
             for b in self._trello.fetch_boards():
                 if b.blacklisted:
                     continue
@@ -506,20 +492,31 @@ class TrelloBot:
                     if c.dueComplete or c.due is None:
                         continue
                     # Divide past dues still missing today
-                    now = aware_now()
                     if c.due.date() == now.date():
                         if c.due < now:
                             await pem.append(f'\n - {c}')
                         else:
                             await fem.append(f'\n - {c}')
-            if False:
-                #da_fare: leggere le card da trello e trovare tutte quelle pending
-                for dd in self._dues:
-                    # Skip past due
-                    if dd.date() != aware_now().date():
+
+    async def h24_due(self, ctx):
+        """Send user a list with cards due in 24h."""
+        logging.info('Requested /h24')
+        pdm, cdm = '*Past dues in 24h*:', '*Due in 24h*:'
+        async with await ctx.spawn(pdm) as pem, await ctx.spawn(cdm) as fem:
+            # Fetch all the cards in whitelisted boards and filter by day
+            now = aware_now()
+            for b in self._trello.fetch_boards():
+                if b.blacklisted:
+                    continue
+                for c in self._trello.fetch_cards(bid=b.id):
+                    if c.dueComplete or c.due is None:
                         continue
-                    #for c in self._dues[dd]:
-                    await em.append(f'\n - {c}')
+                    delay = (c.due - now).total_seconds()
+                    if abs(delay) < 3600 * 24:
+                        if delay < 0:
+                            await pem.append(f'\n - {c}')
+                        else:
+                            await fem.append(f'\n - {c}')
 
     async def _update_boards_lists(self, aem, bem, stm):
         """Update the message with current board status."""
@@ -654,8 +651,9 @@ class TrelloBot:
                 '/update': (self.rescan_updates, True),  # Needs job queue
                 '/set': (self.preferences, True),  # Needs job queue
                 # "Always-fresh" commands: they read directly from trello
-                ('/upcoming', '/upc'): self.upcoming_due,
+                ('/missing', '/miss', '/incomplete', '/inc'): self.missing_dues,
                 '/today': self.today_due,
+                ('/h24', '/24h'): self.h24_due,
                 # '/add': self.add_card,
                 '/todo': self.add_todo,  # TODO fallback per i messaggi non compresi
                 '/lso': self.lso,
@@ -668,9 +666,11 @@ class TrelloBot:
                 # '/circles': self.circles,
             }
 
+            help_message = 'Accepted commands:\nstart, update, set, inc/miss, today, todo, lso, lsb, lsl, wlo, blo, wlb, wlb'
+
             token = text.split()[0]
             if token == '/help':
-                await ctx.send('Accepted commands:\nstart, update, set, upc, today, todo, lso, lsb, lsl, wlo, blo, wlb, wlb')
+                await ctx.send(help_message)
                 return
             for cmd, fun in commands.items():
                 if isinstance(fun, tuple):
