@@ -2,6 +2,7 @@
 
 
 from trello import TrelloClient
+from datetime import datetime
 from dateutil.parser import parse as parse_date
 from trellobot.entities import Organization, Board, List, Card
 import logging
@@ -112,10 +113,13 @@ class TrelloManager:
             yield Card(c['id'], c['name'],
                        c['url'], c['due'], c['dueComplete'])
 
-    def create_card(self, lid, name):
+    def create_card(self, lid, name, due=None):
         """Create a card inside the specified list."""
+        if isinstance(due, datetime):
+            due = due.isoformat() # strftime('%Y-%m-%dT%H:%M:%SZ')
         c = self._cl.fetch_json(f'/cards', http_method='POST', post_args={
             'idList': lid,
             'name': name,
+            'due': due,
         })
         return Card(c['id'], c['name'], c['url'], c['due'], c['dueComplete'])

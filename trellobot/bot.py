@@ -14,6 +14,7 @@ from trellobot.trello import TrelloManager
 
 import humanize
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 
 from collections import Counter
@@ -373,11 +374,11 @@ class TrelloBot:
             # Whatever goes wrong
             await ctx.send(
                 f'*Settings help*\n'
-                f'/set update interval [0.3:{60*24}] _update interval (mins)_ **Now:** {TrelloBot.update_int}\n'
-                f'/set notification interval  [on|off|0.1:24] _notification interval (hours)_ **Now:** {TrelloBot.notify_int}\n'
+                f'/set update interval <0.3:{60*24}> _update interval (mins)_ **Now:** {TrelloBot.update_int}\n'
+                f'/set notification interval <on|off|0.1:24> _notification interval (hours)_ **Now:** {TrelloBot.notify_int}\n'
                 f'/set quiet _make bot quieter_ **Now:** {self._quiet}\n'
                 f'/set verbose _make bot verbose_ **Now:** {not self._quiet}\n'
-                f'/set todo [list ID] **Now:** {self._todo_list}\n'
+                f'/set todo <list ID> **Now:** {self._todo_list}\n'
             )
 
     def _set_todo(self, lid):
@@ -407,6 +408,43 @@ class TrelloBot:
                 space = message.index(' ')
                 message = message[space:].lstrip()
             card = self._trello.create_card(self._todo_list, message)
+            await ctx.send(f'Added TODO as card {card}')
+
+    async def add_todo_mit(self, ctx):
+        '''Add a todo in the default list.'''
+        if self._todo_list is None:
+            await ctx.send('There is no default list set. Please use /set todo')
+        else:
+            # TODO extract lid from parameters when adding cards NOT in TODO
+            message = ctx.update.get('text').strip()
+            if message.startswith('/'):
+                space = message.index(' ')
+                message = message[space:].lstrip()
+            # Card is due today
+            now = aware_now()
+            # Pick a decent default time of the day
+            if now.hour < 10:
+                when = now.replace(hour=12, minute=0, second=0, microsecond=0)
+            elif now.hour < 15:
+                when = now.replace(hour=17, minute=0, second=0, microsecond=0)
+            else:
+                when = now.replace(hour=22, minute=0, second=0, microsecond=0)
+            card = self._trello.create_card(self._todo_list, message, when)
+            await ctx.send(f'Added TODO as card {card}')
+
+    async def add_todo_tomorrow(self, ctx):
+        '''Add a todo in the default list.'''
+        if self._todo_list is None:
+            await ctx.send('There is no default list set. Please use /set todo')
+        else:
+            # TODO extract lid from parameters when adding cards NOT in TODO
+            message = ctx.update.get('text').strip()
+            if message.startswith('/'):
+                space = message.index(' ')
+                message = message[space:].lstrip()
+            # Card is due in 24h
+            when = aware_now() + timedelta(days=1)
+            card = self._trello.create_card(self._todo_list, message, when)
             await ctx.send(f'Added TODO as card {card}')
 
     async def wl_org(self, ctx):
@@ -651,26 +689,28 @@ class TrelloBot:
             jq = JobQueue()
 
             commands = {
-                '/start': (self.start, True),  # Needs job queue
-                '/update': (self.rescan_updates, True),  # Needs job queue
-                '/set': (self.preferences, True),  # Needs job queue
+                ('/start',): (self.start, True),  # Needs job queue
+                ('/update',): (self.rescan_updates, True),  # Needs job queue
+                ('/set',): (self.preferences, True),  # Needs job queue
                 # "Always-fresh" commands: they read directly from trello
                 ('/missing', '/miss', '/incomplete', '/inc'): self.missing_dues,
-                '/today': self.today_due,
+                ('/today',): self.today_due,
                 ('/h24', '/24h'): self.h24_due,
-                # '/add': self.add_card,
-                '/todo': self.add_todo,  # TODO fallback per i messaggi non compresi
-                '/lso': self.lso,
-                '/lsb': self.lsb,
-                '/lsl': self.lsl,
-                '/wlo': self.wl_org,
-                '/blo': self.bl_org,
-                '/wlb': self.wl_board,
-                '/blb': self.bl_board,
+                ('/todo',): self.add_todo,
+                ('/mit',): self.add_todo_mit, # Most Important Tasks for today
+                ('/tomorrow', '/tomo'): self.add_todo_tomorrow,
+                ('/lso',): self.lso,
+                ('/lsb',): self.lsb,
+                ('/lsl',): self.lsl,
+                ('/wlo',): self.wl_org,
+                ('/blo',): self.bl_org,
+                ('/wlb',): self.wl_board,
+                ('/blb',): self.bl_board,
                 # '/circles': self.circles,
             }
 
-            help_message = 'Accepted commands:\nstart, update, set, inc/miss, today, todo, lso, lsb, lsl, wlo, blo, wlb, wlb'
+            help_message = 'Accepted commands:\n'
+            help_message += '\n'.join(k[0] for k in commands.keys())
 
             token = text.split()[0]
             if token == '/help':
@@ -681,7 +721,7 @@ class TrelloBot:
                     fun, pass_job_queue = fun
                 else:
                     pass_job_queue = False
-                if token == cmd or isinstance(cmd, tuple) and token in cmd:
+                if token in cmd:
                     if pass_job_queue:
                         await fun(ctx, jq)
                     else:

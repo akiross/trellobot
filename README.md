@@ -103,7 +103,7 @@ Here's a list of things to do, possibly sorted by priority.
  - [ ] One or two daily reminders of due cards and recently past dues.
  - [ ] Customizable 
  - [ ] Have decent testing of the bot, mocking/faking trello and telegram.
- - [ ] Quick-add of cards with a default list if none is specified.
+ - [X] Quick-add of cards with a default list if none is specified.
  - [ ] Instead of just blacklisting boards and organizations, the bot should
        respect user subscriptions to list, cards and boards (get due
 	   notifications for every subscribed board/list/card and every card in
